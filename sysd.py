@@ -4,9 +4,8 @@ import time
 import random
 import struct
 
-# Configurações (modificar conforme necessário)
-HOST = 'localhost'  # Mudar para IP real se testar em rede
-PORTA_BASE = 5000   # Pode precisar alterar se der erro de porta ocupada
+HOST = 'localhost'  
+PORTA_BASE = 5000  
 
 # --------------------------------------------
 # Parte 1: Comunicação Básica entre Cliente-Servidor
@@ -16,7 +15,7 @@ class Sensor:
     def __init__(self, id_sensor):
         self.id = id_sensor
         self.porta = PORTA_BASE + id_sensor
-        self.clock = 0  # Relógio de Lamport simplificado
+        self.clock = 0  # Relógio de Lamport
         self.coordenador = False
         
     def iniciar(self):
