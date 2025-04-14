@@ -5,7 +5,7 @@ service SensorService {
   rpc GetData (Vazio) returns (DadosSensor) {}
 }
 
-message Vazio {}  // Mensagem vazia para requisição
+message Vazio {}  // Mensagem vazia para receber dados
 
 message DadosSensor {
   int32 id = 1;

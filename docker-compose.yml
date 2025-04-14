@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  sensor1:
+    build: .
+    container_name: sensor1
+    command: python sensor.py 1
+    ports:
+      - "5001:5001"
+      - "6001:6001"
+      - "50052:50052"  # gRPC
+    networks:
+      - sisd_network
+    environment:
+      - NODE_ID=1
+      - DATA_PORT=5001
+      - ELECTION_PORT=6001
+      - GRPC_PORT=50052
+
+  sensor2:
+    build: .
+    container_name: sensor2
+    command: python sensor.py 2
+    ports:
+      - "5002:5002"
+      - "6002:6002"
+      - "50053:50053"  # gRPC
+    networks:
+      - sisd_network
+    environment:
+      - NODE_ID=2
+      - DATA_PORT=5002
+      - ELECTION_PORT=6002
+      - GRPC_PORT=50053
+
+  sensor3:
+    build: .
+    container_name: sensor3
+    command: python sensor.py 3
+    ports:
+      - "5003:5003"
+      - "6003:6003"
+      - "50054:50054"  # gRPC
+    networks:
+      - sisd_network
+    environment:
+      - NODE_ID=3
+      - DATA_PORT=5003
+      - ELECTION_PORT=6003
+      - GRPC_PORT=50054
+
+  cliente:
+    build: .
+    container_name: cliente
+    command: python cliente.py
+    ports:
+      - "5000:5000"
+    networks:
+      - sisd_network
+    depends_on:
+      - sensor1
+      - sensor2
+      - sensor3
+    stdin_open: true
+    tty: true
+
+networks:
+  sisd_network:
+    driver: bridge
