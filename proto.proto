@@ -1,0 +1,15 @@
+// proto.proto
+syntax = "proto3";
+
+service SensorService {
+  rpc GetData (Vazio) returns (DadosSensor) {}
+}
+
+message Vazio {}  // Mensagem vazia para requisição
+
+message DadosSensor {
+  int32 id = 1;
+  float temperatura = 2;
+  float umidade = 3;
+  int32 timestamp = 4;
+}
