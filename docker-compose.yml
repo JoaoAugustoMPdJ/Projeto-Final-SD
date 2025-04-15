@@ -1,4 +1,4 @@
-version: '3.8'
+version: '4.40.0'
 
 services:
   sensor1:
@@ -44,6 +44,7 @@ services:
     networks:
       - sisd_network
     environment:
+      - SECURITY_KEY=chave_segura_compartilhada
       - NODE_ID=3
       - DATA_PORT=5003
       - ELECTION_PORT=6003

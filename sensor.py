@@ -7,140 +7,219 @@ import os
 from algorit import LamportClock
 from eleicao import Coordinator
 from multi import iniciar_grpc
+from security import SecurityHandler
 
 class Sensor:
     def __init__(self, sensor_id):
+        """Inicializa o sensor com todas as configurações necessárias"""
+        # Configurações básicas
         self.id = sensor_id
         self.hostname = f"sensor{sensor_id}"
+        self.is_running = True
         
-        # Portas configuráveis por variáveis de ambiente
+        # Configuração de portas
         self.data_port = int(os.getenv('DATA_PORT', 5000 + sensor_id))
         self.election_port = int(os.getenv('ELECTION_PORT', 6000 + sensor_id))
         self.grpc_port = int(os.getenv('GRPC_PORT', 50050 + sensor_id))
         
+        # Componentes do sistema
         self.clock = LamportClock()
         self.data_lock = threading.Lock()
-        self.is_running = True
+        self.election_log = []
+        self.security = SecurityHandler(sensor_id)
         
-        # Configuração dos nós
+        # Configuração da rede
         self.nodes = [
-            {'id': 1, 'host': 'sensor1', 'data_port': 5001, 'election_port': 6001},
-            {'id': 2, 'host': 'sensor2', 'data_port': 5002, 'election_port': 6002},
-            {'id': 3, 'host': 'sensor3', 'data_port': 5003, 'election_port': 6003}
+            {'id': 1, 'host': 'sensor1', 'data_port': 5001, 'election_port': 6001, 'status': 'unknown'},
+            {'id': 2, 'host': 'sensor2', 'data_port': 5002, 'election_port': 6002, 'status': 'unknown'},
+            {'id': 3, 'host': 'sensor3', 'data_port': 5003, 'election_port': 6003, 'status': 'unknown'}
         ]
         
-        # Dados climáticos simulados
-        with self.data_lock:
-            self.data = self.generate_sensor_data()
+        # Dados do sensor
+        self.initialize_sensor_data()
         
-        # Serviço de eleição
-        election_nodes = [{'node_id': n['id'], 'host': n['host'], 'port': n['election_port']} for n in self.nodes]
-        self.coordinator = Coordinator(self.id, self.election_port, election_nodes)
+        # Módulo de eleição
+        self.initialize_election_module()
         
-        # Inicia todos os serviços
+        # Inicia serviços
         self.start_services()
 
-    def generate_sensor_data(self):
-        """Gera dados climáticos aleatórios"""
-        return {
-            "temperature": round(random.uniform(20, 30), 2),
-            "humidity": round(random.uniform(50, 80), 2),
-            "pressure": round(random.uniform(980, 1020), 2),
-            "last_updated": time.time()
-        }
+    # === INICIALIZAÇÃO ===
+    
+    def initialize_sensor_data(self):
+        """Inicializa os dados do sensor com valores aleatórios"""
+        with self.data_lock:
+            self.data = {
+                "temperature": round(random.uniform(20, 30), 2),
+                "humidity": round(random.uniform(50, 80), 2),
+                "pressure": round(random.uniform(980, 1020), 2),
+                "last_updated": time.time(),
+                "version": 1  # Novo campo para controle de versão
+            }
 
+    def initialize_election_module(self):
+        """Configura o módulo de eleição distribuída"""
+        election_nodes = [{'node_id': n['id'], 'host': n['host'], 'port': n['election_port']} 
+                         for n in self.nodes]
+        self.coordinator = Coordinator(self.id, self.election_port, election_nodes)
+
+    # === SERVIÇOS PRINCIPAIS ===
+    
     def start_services(self):
-        """Inicia todos os serviços do sensor"""
+        """Inicia todos os serviços em threads separadas"""
         services = [
-            self.handle_data_requests,
-            self.simulate_data_changes,
-            self.monitor_nodes,
-            self.start_election_service,
-            self.start_grpc_service
+            self.handle_data_requests,    # Servidor de dados
+            self.simulate_data_changes,   # Atualização periódica de dados
+            self.monitor_nodes,           # Monitoramento da rede
+            self.start_election_service,  # Serviço de eleição
+            self.start_grpc_service,      # Servidor gRPC
+            self.replicate_data_periodically,  # Novo: Replicação de dados
+            self.periodic_snapshots       # Novo: Snapshots periódicos
         ]
         
         for service in services:
             threading.Thread(target=service, daemon=True).start()
         
-        print(f"Sensor {self.id} iniciado na porta {self.data_port}")
+        # Interface do usuário
+        threading.Thread(target=self.interactive_menu, daemon=True).start()
+        
+        self.log(f"Sensor {self.id} iniciado na porta {self.data_port}")
 
-    def start_grpc_service(self):
-        """Inicia o servidor gRPC"""
-        iniciar_grpc(self)
-
-    def start_election_service(self):
-        """Inicia o serviço de eleição"""
-        time.sleep(1)  # Espera outros serviços iniciarem
-        self.coordinator.start()
-        print(f"  Serviço de eleição iniciado na porta {self.election_port}")
-
-    def simulate_data_changes(self):
-        """Atualiza dados climáticos periodicamente"""
-        while self.is_running:
-            time.sleep(5)
-            with self.data_lock:
-                self.data = self.generate_sensor_data()
-            self.log(f"Dados atualizados: {self.data}")
-
+    # === COMUNICAÇÃO E PROCESSAMENTO DE MENSAGENS ===
+    
     def handle_data_requests(self):
-        """Processa requisições de dados climáticos"""
+        """Servidor principal para lidar com requisições de dados"""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(('0.0.0.0', self.data_port))
             s.listen(5)
-            self.log(f" Serviço de dados ativo na porta {self.data_port}")
             
             while self.is_running:
                 try:
                     s.settimeout(1)
                     conn, addr = s.accept()
-                    raw_data = conn.recv(1024).decode()
+                    raw_data = conn.recv(4096).decode()
                     
-                    if not raw_data:
-                        conn.close()
-                        continue
-                        
-                    response = self.process_message(raw_data)
-                    conn.send(json.dumps(response).encode())
+                    if raw_data:
+                        response = self.process_message(raw_data)
+                        conn.send(json.dumps(response).encode())
                     conn.close()
                 except socket.timeout:
                     continue
                 except Exception as e:
                     self.log(f"Erro na conexão: {str(e)}")
-                    if 'conn' in locals():
-                        conn.close()
 
     def process_message(self, raw_data):
-        """Processa mensagens recebidas"""
+        """Processa todos os tipos de mensagens recebidas"""
         self.clock.increment()
         
-        if raw_data.startswith("TIMESTAMP:"):
-            received_time = int(raw_data.split(":")[1])
-            self.clock.update(received_time)
-            return {"status": "timestamp_updated"}
-            
-        elif raw_data == "GET_DATA":
-            with self.data_lock:
-                return {
-                    "sensor_id": self.id,
-                    "data": self.data,
-                    "timestamp": self.clock.get_time(),
-                    "is_coordinator": self.coordinator.is_current_coordinator(),
-                    "coordinator": self.coordinator.coordinator
-                }
-                
+        # Mensagens originais
+        if raw_data == "GET_DATA":
+            return self.handle_get_data()
         elif raw_data == "HEARTBEAT":
             return {"status": "ALIVE", "timestamp": self.clock.get_time()}
-            
         elif raw_data.startswith("ALERT:"):
-            alert = raw_data.split(":", 1)[1]
-            self.log(f" ALERTA RECEBIDO: {alert}")
-            return {"status": "alert_received"}
+            return self.handle_alert(raw_data)
+        elif raw_data.startswith("TIMESTAMP:"):
+            return self.handle_timestamp(raw_data)
+            
+        # Novas mensagens
+        elif raw_data == "SNAPSHOT":
+            return self.take_snapshot()
+        elif raw_data.startswith("REPLICATE:"):
+            return self.handle_replication(raw_data)
+        elif raw_data == "GET_NODES_STATUS":
+            return {"nodes": self.nodes}
             
         return {"error": "invalid_request"}
 
+    # === MÉTODOS ORIGINAIS DE PROCESSAMENTO ===
+    
+    def handle_get_data(self):
+        """Responde a requisições GET_DATA"""
+        with self.data_lock:
+            return {
+                "sensor_id": self.id,
+                "data": self.data,
+                "timestamp": self.clock.get_time(),
+                "is_coordinator": self.coordinator.is_current_coordinator(),
+                "coordinator": self.coordinator.coordinator
+            }
+
+    def handle_alert(self, raw_data):
+        """Processa mensagens de alerta"""
+        alert = raw_data.split(":", 1)[1]
+        self.log(f"ALERTA: {alert}")
+        self.election_log.append(f"[{time.ctime()}] Alerta recebido: {alert}")
+        return {"status": "alert_received"}
+
+    def handle_timestamp(self, raw_data):
+        """Atualiza o clock lógico"""
+        received_time = int(raw_data.split(":")[1])
+        self.clock.update(received_time)
+        return {"status": "timestamp_updated"}
+
+    # === NOVOS MÉTODOS DE PROCESSAMENTO ===
+    
+    def take_snapshot(self):
+        """Captura um snapshot do estado atual"""
+        with self.data_lock:
+            return {
+                'sensor_id': self.id,
+                'data': self.data.copy(),
+                'timestamp': self.clock.get_time(),
+                'version': self.data['version']
+            }
+
+    def handle_replication(self, raw_data):
+        """Processa dados replicados de outros nós"""
+        encrypted_data = raw_data.split(":", 1)[1]
+        try:
+            decrypted_data = self.security.decrypt(encrypted_data)
+            with self.data_lock:
+                if decrypted_data.get('version', 0) > self.data['version']:
+                    self.data.update(decrypted_data)
+                    self.data['last_updated'] = time.time()
+                    return {"status": "ACK"}
+            return {"status": "NACK"}
+        except Exception as e:
+            self.log(f"Erro na replicação: {str(e)}")
+            return {"status": "ERROR"}
+
+    # === REPLICAÇÃO DE DADOS ===
+    
+    def replicate_data_periodically(self):
+        """Replica dados periodicamente para outros nós"""
+        while self.is_running:
+            time.sleep(15)
+            if self.coordinator.is_current_coordinator():
+                with self.data_lock:
+                    self.replicate_data(self.data.copy())
+
+    def replicate_data(self, data):
+        """Envia dados para outros nós"""
+        success_count = 0
+        encrypted_data = self.security.encrypt(data)
+        
+        for node in self.nodes:
+            if node['id'] != self.id:
+                try:
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.settimeout(2)
+                        s.connect((node['host'], node['data_port']))
+                        s.send(f"REPLICATE:{encrypted_data}".encode())
+                        if s.recv(1024).decode() == "ACK":
+                            success_count += 1
+                            node['status'] = 'online'
+                except:
+                    node['status'] = 'offline'
+        
+        return success_count >= len(self.nodes) // 2
+
+    # === MONITORAMENTO E TOLERÂNCIA A FALHAS ===
+    
     def monitor_nodes(self):
-        """Monitora outros nós periodicamente"""
+        """Monitora o status dos nós da rede"""
         while self.is_running:
             time.sleep(10)
             if self.coordinator.is_current_coordinator():
@@ -149,27 +228,29 @@ class Sensor:
                 self.verify_coordinator()
 
     def check_nodes_health(self):
-        """Verifica saúde dos nós (apenas coordenador)"""
-        active_nodes = []
+        """Verifica a saúde dos nós (como coordenador)"""
+        active_nodes = 0
         for node in self.nodes:
-            if node['id'] != self.id:
-                try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        s.settimeout(2)
-                        s.connect((node['host'], node['data_port']))
-                        s.send("HEARTBEAT".encode())
-                        response = json.loads(s.recv(1024).decode())
-                        if response.get("status") == "ALIVE":
-                            active_nodes.append(node['id'])
-                except Exception as e:
-                    self.log(f" Nó {node['id']} não respondeu: {str(e)}")
-        
-        if len(active_nodes) < len(self.nodes) - 2:
-            self.log(" Muitos nós inativos - enviando alerta!")
+            if node['id'] == self.id:
+                active_nodes += 1
+                continue
+                
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(2)
+                    s.connect((node['host'], node['data_port']))
+                    s.send("HEARTBEAT".encode())
+                    if json.loads(s.recv(1024).decode()).get("status") == "ALIVE":
+                        active_nodes += 1
+                        node['status'] = 'online'
+            except:
+                node['status'] = 'offline'
+                
+        if active_nodes < len(self.nodes) - 1:
             self.broadcast_alert("AVISO: Múltiplas falhas detectadas")
 
     def verify_coordinator(self):
-        """Verifica se o coordenador está ativo"""
+        """Verifica se o coordenador está respondendo"""
         if not self.coordinator.coordinator:
             return
             
@@ -182,36 +263,58 @@ class Sensor:
                 if s.recv(1024).decode() != "PONG":
                     raise Exception("Resposta inválida")
         except Exception as e:
-            self.log(f" Coordenador não respondeu: {str(e)}")
+            self.log(f"Coordenador inativo: {str(e)}")
             self.coordinator.start_election()
 
-    def broadcast_alert(self, message):
-        """Envia alertas para todos os nós"""
-        for node in self.nodes:
-            if node['id'] != self.id:
-                try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                        s.settimeout(1)
-                        s.connect((node['host'], node['data_port']))
-                        s.send(f"ALERT:{message}".encode())
-                except:
-                    continue
+    # === INTERFACE DO USUÁRIO ===
+    
+    def interactive_menu(self):
+        """Menu interativo principal"""
+        menu_options = {
+            "1": ("Visualizar dados deste sensor", self.show_local_data),
+            "2": ("Consultar sensor específico", self.query_specific_sensor),
+            "3": ("Visualizar todos os sensores", self.show_all_sensors),
+            "4": ("Informações de eleição", self.show_election_info),
+            "5": ("Forçar nova eleição", self.force_election),
+            "6": ("Status da rede", self.show_network_status),
+            "7": ("Capturar snapshot global", self.capture_global_snapshot),
+            "8": ("Sair", self.stop)
+        }
+        
+        while self.is_running:
+            try:
+                print("\n=== MENU PRINCIPAL ===")
+                for key, (desc, _) in menu_options.items():
+                    print(f"{key}. {desc}")
+                
+                choice = input("\nEscolha uma opção: ").strip()
+                
+                if choice in menu_options:
+                    menu_options[choice][1]()
+                    
+            except KeyboardInterrupt:
+                print("\nUse a opção 8 para sair corretamente.")
+            except Exception as e:
+                print(f"Erro: {str(e)}")
 
+    # === MÉTODOS AUXILIARES ===
+    
     def log(self, message):
-        """Log formatado com timestamp"""
+        """Registra mensagens de log"""
         print(f"[Sensor {self.id}][T{self.clock.get_time()}] {message}")
 
     def stop(self):
-        """Para todos os serviços do sensor"""
+        """Encerra o sensor corretamente"""
         self.is_running = False
         self.coordinator.stop()
+        print(f"\n🛑 Sensor {self.id} encerrado")
 
 if __name__ == "__main__":
-    print("\n===  Sistema de Sensores Climáticos Distribuídos ===")
-    sensor_id = int(os.getenv('NODE_ID', input("Informe o ID do sensor (1-3): ").strip()))
+    print("\n=== SISTEMA DE SENSORES DISTRIBUÍDOS ===  SISTEMA PARA USO EDUCACIONAL")
+    sensor_id = int(os.getenv('NODE_ID', input("ID do sensor (1-3): ").strip()))
     
     if sensor_id not in [1, 2, 3]:
-        print("ID inválido! Deve ser 1, 2 ou 3")
+        print("⚠️ ID deve ser 1, 2 ou 3")
         exit(1)
         
     sensor = Sensor(sensor_id)
@@ -221,4 +324,3 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         sensor.stop()
-        print(f"\n[Sensor {sensor_id}]  Encerrando operação...")
