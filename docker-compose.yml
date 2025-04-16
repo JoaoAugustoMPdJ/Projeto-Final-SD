@@ -1,69 +1,101 @@
-version: '4.40.0'
+version: '3.8'
 
 services:
   sensor1:
     build: .
+    hostname: sensor1
     container_name: sensor1
     command: python sensor.py 1
     ports:
       - "5001:5001"
       - "6001:6001"
-      - "50052:50052"  # gRPC
-    networks:
-      - sisd_network
+      - "50052:50052"
     environment:
       - NODE_ID=1
       - DATA_PORT=5001
       - ELECTION_PORT=6001
       - GRPC_PORT=50052
+      - SECURITY_KEY=chave_32_bytes_ultra_secreta_1234567890
+    networks:
+      - sisd_network
+    healthcheck:
+      test: ["CMD-SHELL", "echo -n HEALTHCHECK | nc -w 2 localhost 5001 | grep -q ALIVE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   sensor2:
     build: .
+    hostname: sensor2
     container_name: sensor2
     command: python sensor.py 2
     ports:
       - "5002:5002"
       - "6002:6002"
-      - "50053:50053"  # gRPC
-    networks:
-      - sisd_network
+      - "50053:50053"
     environment:
       - NODE_ID=2
       - DATA_PORT=5002
       - ELECTION_PORT=6002
       - GRPC_PORT=50053
+      - SECURITY_KEY=chave_32_bytes_ultra_secreta_1234567890
+    networks:
+      - sisd_network
+    healthcheck:
+      test: ["CMD-SHELL", "echo -n HEALTHCHECK | nc -w 2 localhost 5002 | grep -q ALIVE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   sensor3:
     build: .
+    hostname: sensor3
     container_name: sensor3
     command: python sensor.py 3
     ports:
       - "5003:5003"
       - "6003:6003"
-      - "50054:50054"  # gRPC
-    networks:
-      - sisd_network
+      - "50054:50054"
     environment:
-      - SECURITY_KEY=chave_segura_compartilhada
       - NODE_ID=3
       - DATA_PORT=5003
       - ELECTION_PORT=6003
       - GRPC_PORT=50054
+      - SECURITY_KEY=chave_32_bytes_ultra_secreta_1234567890
+    networks:
+      - sisd_network
+    healthcheck:
+      test: ["CMD-SHELL", "echo -n HEALTHCHECK | nc -w 2 localhost 5003 | grep -q ALIVE"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   cliente:
     build: .
     container_name: cliente
-    command: python cliente.py
-    ports:
-      - "5000:5000"
+    command: sh -c "sleep 15 && python -u cliente.py"
+    environment:
+      - SECURITY_KEY=chave_32_bytes_ultra_secreta_1234567890
     networks:
       - sisd_network
     depends_on:
-      - sensor1
-      - sensor2
-      - sensor3
+      sensor1:
+        condition: service_healthy
+      sensor2:
+        condition: service_healthy
+      sensor3:
+        condition: service_healthy
     stdin_open: true
     tty: true
+    volumes:
+      - ./:/app
+    restart: unless-stopped
 
 networks:
   sisd_network:
