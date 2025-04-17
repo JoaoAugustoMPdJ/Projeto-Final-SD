@@ -18,7 +18,7 @@ class Coordinator:
         """Inicia os serviços do nó"""
         threading.Thread(target=self.listen_for_messages, daemon=True).start()
         threading.Thread(target=self.monitor_coordinator, daemon=True).start()
-        print(f"⚡ Nó {self.node_id} iniciado na porta {self.port}")
+        print(f" Nó {self.node_id} iniciado na porta {self.port}")
         
     def monitor_coordinator(self):
         """Verifica periodicamente se o coordenador está ativo"""
