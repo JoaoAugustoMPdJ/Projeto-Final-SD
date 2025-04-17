@@ -15,7 +15,6 @@ O projeto está dividido em arquivos que representam funcionalidades específica
 **Modelos utilizados:**
 - Cliente-servidor
 - Arquitetura multicamadas
-- RMI (Java/Python)
 - gRPC
 
 Os arquivos principais relacionados:
@@ -75,15 +74,13 @@ Script:
 
 2. **Execução manual:**  
    Você também pode executar os scripts individualmente:
+   
+   1. docker-compose build --no-cache
+   2. docker-compose up
+   3. Abra um novo terminal e execute: docker exec -it cliente sh
+   4. Ainda no novo terminal: python cliente.py
 
-   ```bash
-   python cliente.py
-   python algorit.py
-   python eleicao.py
-   python multi.py
-   ```
-
-3. **gRPC:**  
+4. **gRPC:**  
    Para gerar os arquivos gRPC a partir do .proto:
 
    ```bash
