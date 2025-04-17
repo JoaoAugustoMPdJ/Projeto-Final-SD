@@ -311,14 +311,14 @@ class Sensor:
     def stop(self):
         self.is_running = False
         self.coordinator.stop()
-        print(f"\n🛑 Sensor {self.id} encerrado")
+        print(f"\n Sensor {self.id} encerrado")
 
 if __name__ == "__main__":
     print("\n=== SISTEMA DE SENSORES DISTRIBUÍDOS ===  SISTEMA PARA USO EDUCACIONAL")
     sensor_id = int(os.getenv('NODE_ID'))
     
     if sensor_id not in [1, 2, 3]:
-        print("⚠️ ID deve ser 1, 2 ou 3")
+        print(" ID deve ser 1, 2 ou 3")
         exit(1)
         
     sensor = Sensor(sensor_id)
