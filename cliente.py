@@ -77,7 +77,7 @@ class Cliente:
         choice = input("Escolha o tipo de consulta: ")
         
         for sensor in self.sensors:
-            print(f"\n🔹 Sensor {sensor['id']}")
+            print(f"\n Sensor {sensor['id']}")
             
             if choice == "1":
                 data = self.send_command(sensor, "GET_DATA")
@@ -127,9 +127,9 @@ class Cliente:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(1)
                     s.connect((sensor["host"], sensor["port"]))
-                    status = "✅ ONLINE"
+                    status = " ONLINE"
             except:
-                status = "❌ OFFLINE"
+                status = " OFFLINE"
                 
             print(f"Sensor {sensor['id']}: {status}")
 
@@ -162,14 +162,14 @@ class Cliente:
         response = self.send_command(coordinator, "PING")
         
         if response and response.get("status") == "PONG":
-            print("✅ Coordenador respondendo corretamente")
+            print(" Coordenador respondendo corretamente")
         else:
-            print("❌ Falha na comunicação com o coordenador")
+            print(" Falha na comunicação com o coordenador")
 
     def display_sensor_data(self, sensor_id, data):
         """Exibe os dados do sensor formatados"""
         if not data:
-            print(f"\n🔹 Sensor {sensor_id} - 🚫 Offline")
+            print(f"\n🔹 Sensor {sensor_id} -  Offline")
             return
             
         sensor_data = data.get("data", {})
@@ -184,15 +184,15 @@ class Cliente:
         except:
             time_str = "Data inválida"
         
-        print(f"\n🔹 Sensor {sensor_id}")
-        print(f"🌡 Temperatura: {temp}°C")
-        print(f"💧 Umidade: {humidity}%")
-        print(f"📊 Pressão: {sensor_data.get('pressure', 'N/A')} hPa")
-        print(f"🕒 Atualizado: {time_str}")
-        print(f"🔄 Versão: {sensor_data.get('version', 'N/A')}")
+        print(f"\n Sensor {sensor_id}")
+        print(f" Temperatura: {temp}°C")
+        print(f"Umidade: {humidity}%")
+        print(f" Pressão: {sensor_data.get('pressure', 'N/A')} hPa")
+        print(f" Atualizado: {time_str}")
+        print(f" Versão: {sensor_data.get('version', 'N/A')}")
     
         if data.get('is_coordinator'):
-            print("👑 Este nó é o coordenador")
+            print(" Este nó é o coordenador")
 
     def display_coordinator_info(self, data):
         """Exibe informações do coordenador"""
@@ -201,7 +201,7 @@ class Cliente:
             return
             
         if data.get('is_coordinator'):
-            print("👑 Este nó é o coordenador")
+            print(" Este nó é o coordenador")
         else:
             print(f"Coordenador atual: Nó {data.get('coordinator_id', 'N/A')}")
 
