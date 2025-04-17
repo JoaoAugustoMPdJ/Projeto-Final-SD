@@ -139,7 +139,7 @@ class Cliente:
         for sensor in self.sensors:
             data = self.send_command(sensor, "SNAPSHOT")
             if data:
-                print(f"\n📸 Sensor {sensor['id']} - Snapshot:")
+                print(f"\n Sensor {sensor['id']} - Snapshot:")
                 self.display_sensor_data(sensor["id"], data)
 
     def test_failure_detection(self):
@@ -169,7 +169,7 @@ class Cliente:
     def display_sensor_data(self, sensor_id, data):
         """Exibe os dados do sensor formatados"""
         if not data:
-            print(f"\n🔹 Sensor {sensor_id} -  Offline")
+            print(f"\n Sensor {sensor_id} -  Offline")
             return
             
         sensor_data = data.get("data", {})
